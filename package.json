@@ -20,6 +20,8 @@
     "prepare": "husky"
   },
   "dependencies": {
+    "@fontsource-variable/outfit": "^5.2.8",
+    "@lucide/vue": "^1.11.0",
     "vue": "^3.5.29"
   },
   "devDependencies": {
