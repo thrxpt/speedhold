@@ -1,6 +1,6 @@
 {
   "name": "speedhold",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "description": "Hold a hotkey to speed up any video. Release to snap back. Simple and customizable.",
   "type": "module",
