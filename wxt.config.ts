@@ -4,7 +4,7 @@ import { defineConfig } from "wxt";
 export default defineConfig({
   modules: ["@wxt-dev/module-vue", "@wxt-dev/auto-icons"],
   manifest: {
-    name: "Hold to Speed Up",
+    name: "SpeedHold: Hold to Speed Up",
     permissions: ["storage"],
   },
   hooks: {

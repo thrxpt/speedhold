@@ -28,7 +28,7 @@ export default defineContentScript({
     const videoElement = await waitForElement("video");
 
     const ui = await createShadowRootUi(ctx, {
-      name: "hold-to-speed-up",
+      name: "speed-hold",
       position: "inline",
       anchor: videoElement,
       append: (anchor, ui) => anchor.parentElement?.insertBefore(ui, anchor.nextSibling),

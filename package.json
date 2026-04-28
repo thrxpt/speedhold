@@ -1,8 +1,8 @@
 {
-  "name": "hold-to-speed-up",
+  "name": "speed-hold",
   "version": "0.0.0",
   "private": true,
-  "description": "Hold Key to Speed Up Video",
+  "description": "Hold a hotkey to speed up any video. Release to snap back. Simple and customizable.",
   "type": "module",
   "scripts": {
     "dev": "wxt",
