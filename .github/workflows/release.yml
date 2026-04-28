@@ -1,0 +1,32 @@
+name: Release
+
+permissions:
+  contents: write
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Zip extensions
+        run: |
+          bun run zip
+          bun run zip:firefox
+
+      - name: Upload to GitHub Release
+        run: bunx changelogithub --assets ".output/*-chrome.zip,.output/*-firefox.zip"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
