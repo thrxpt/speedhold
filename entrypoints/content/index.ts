@@ -45,7 +45,7 @@ export default defineContentScript({
     const rect = videoElement.getBoundingClientRect();
 
     const ui = await createShadowRootUi(ctx, {
-      name: "speed-hold",
+      name: "speedhold",
       position: "overlay",
       anchor: videoElement,
       append: "before",

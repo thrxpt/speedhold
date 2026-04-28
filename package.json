@@ -1,5 +1,5 @@
 {
-  "name": "speed-hold",
+  "name": "speedhold",
   "version": "1.0.0",
   "private": true,
   "description": "Hold a hotkey to speed up any video. Release to snap back. Simple and customizable.",
