@@ -7,3 +7,7 @@ export const playbackSpeedStorage = storage.defineItem<number>("local:playbackSp
 export const keybindStorage = storage.defineItem<string>("local:keybind", {
   defaultValue: DEFAULT_CONFIG.keybind,
 });
+
+export const showIndicatorStorage = storage.defineItem<boolean>("local:showIndicator", {
+  defaultValue: DEFAULT_CONFIG.showIndicator,
+});

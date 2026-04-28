@@ -1,8 +1,5 @@
-import { createApp } from "vue";
-
-import { DEFAULT_CONFIG } from "@/utils/config";
-import { keybindStorage, playbackSpeedStorage } from "@/utils/storage";
-
+import "@/assets/style.css";
+import "@fontsource-variable/outfit/wght.css";
 import App from "./App.vue";
 
 export default defineContentScript({

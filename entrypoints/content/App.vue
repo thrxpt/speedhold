@@ -1,27 +1,28 @@
 <script lang="ts" setup>
 import { FastForward } from "@lucide/vue";
-import { ref, onMounted } from "vue";
-
-import { DEFAULT_CONFIG } from "@/utils/config";
-import { playbackSpeedStorage } from "@/utils/storage";
-
-import "@fontsource-variable/outfit/wght.css";
 
 const currentSpeed = ref(DEFAULT_CONFIG.playbackSpeed);
+const showIndicator = ref(DEFAULT_CONFIG.showIndicator);
 
 onMounted(async () => {
   currentSpeed.value = (await playbackSpeedStorage.getValue()) ?? DEFAULT_CONFIG.playbackSpeed;
+  showIndicator.value = (await showIndicatorStorage.getValue()) ?? DEFAULT_CONFIG.showIndicator;
+
   playbackSpeedStorage.watch((newSpeed) => {
     currentSpeed.value = newSpeed ?? DEFAULT_CONFIG.playbackSpeed;
+  });
+
+  showIndicatorStorage.watch((newVal) => {
+    showIndicator.value = newVal ?? DEFAULT_CONFIG.showIndicator;
   });
 });
 </script>
 
 <template>
-  <div class="wrapper">
+  <div v-if="showIndicator" class="wrapper">
     <div class="box">
       <div class="speed">{{ currentSpeed.toFixed(1) }}<span>×</span></div>
-      <FastForward :size="16" fill="#ffffff" strokeWidth="0" />
+      <FastForward :size="16" fill="var(--text)" strokeWidth="0" />
     </div>
   </div>
 </template>
@@ -54,7 +55,7 @@ onMounted(async () => {
 }
 
 .speed {
-  color: #ffffff;
+  color: var(--text);
   font-size: 20px;
   font-weight: 800;
   font-family: "Outfit Variable", sans-serif;
@@ -62,7 +63,7 @@ onMounted(async () => {
 
   span {
     font-size: 18px;
-    color: #a1a1a1;
+    color: var(--text-dim);
     margin-left: 1px;
   }
 }
