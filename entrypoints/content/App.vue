@@ -6,7 +6,7 @@ import { FastForward } from "@lucide/vue";
 <template>
   <div class="wrapper">
     <div class="box">
-      <div class="speed">2.0<span>x</span></div>
+      <div class="speed">2.0<span>×</span></div>
       <FastForward :size="16" fill="#ffffff" strokeWidth="0" />
     </div>
   </div>
