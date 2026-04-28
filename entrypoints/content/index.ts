@@ -85,12 +85,18 @@ export default defineContentScript({
       requestAnimationFrame(enforceSpeed);
     };
 
+    let wasPaused = false;
+
     const startSpeedUp = () => {
       if (isSpeedingUp) return;
       isSpeedingUp = true;
       const wrapper = indicator?.querySelector(".wrapper");
       wrapper?.classList.add("visible");
       enforceSpeed();
+      if (videoElement.paused) {
+        wasPaused = true;
+        videoElement.play();
+      }
     };
 
     const stopSpeedUp = () => {
@@ -100,6 +106,10 @@ export default defineContentScript({
       const player = document.querySelector("video");
       if (player) {
         player.playbackRate = 1;
+      }
+      if (wasPaused) {
+        videoElement.pause();
+        wasPaused = false;
       }
     };
 
