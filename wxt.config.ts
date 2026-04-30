@@ -6,6 +6,13 @@ export default defineConfig({
   manifest: {
     name: "SpeedHold: Hold to Speed Up",
     permissions: ["storage"],
+    browser_specific_settings: {
+      gecko: {
+        data_collection_permissions: {
+          required: ["none"],
+        },
+      },
+    },
   },
   hooks: {
     "build:manifestGenerated": (wxt, manifest) => {
