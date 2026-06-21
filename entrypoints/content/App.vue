@@ -3,6 +3,7 @@ import { FastForward } from "@lucide/vue";
 
 const currentSpeed = ref(DEFAULT_CONFIG.playbackSpeed);
 const showIndicator = ref(DEFAULT_CONFIG.showIndicator);
+const active = inject<Ref<boolean>>("overrideActive", ref(false));
 
 onMounted(async () => {
   currentSpeed.value = (await playbackSpeedStorage.getValue()) ?? DEFAULT_CONFIG.playbackSpeed;
@@ -19,7 +20,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div v-if="showIndicator" class="wrapper">
+  <div v-if="showIndicator" class="wrapper" :class="{ visible: active }">
     <div class="box">
       <div class="speed">{{ currentSpeed.toFixed(1) }}<span>×</span></div>
       <FastForward :size="16" fill="var(--text)" strokeWidth="0" />

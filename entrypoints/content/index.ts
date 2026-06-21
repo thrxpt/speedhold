@@ -27,6 +27,7 @@ export default defineContentScript({
     };
 
     let indicator: HTMLElement | undefined;
+    const overrideActive = ref(false);
 
     let currentSpeed = await playbackSpeedStorage.getValue();
     let currentKeybind = await keybindStorage.getValue();
@@ -56,6 +57,7 @@ export default defineContentScript({
         container.style.zIndex = "99999";
         container.style.margin = "0";
         const app = createApp(App);
+        app.provide("overrideActive", overrideActive);
         app.mount(container);
         indicator = container;
         return app;
@@ -81,8 +83,7 @@ export default defineContentScript({
     });
 
     override.subscribe((active) => {
-      const wrapper = indicator?.querySelector(".wrapper");
-      wrapper?.classList.toggle("visible", active);
+      overrideActive.value = active;
     });
 
     ctx.addEventListener(window, "keydown", (e) => {
