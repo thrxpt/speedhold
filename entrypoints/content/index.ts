@@ -26,7 +26,6 @@ export default defineContentScript({
       });
     };
 
-    let isSpeedingUp = false;
     let indicator: HTMLElement | undefined;
 
     let currentSpeed = await playbackSpeedStorage.getValue();
@@ -76,42 +75,15 @@ export default defineContentScript({
     });
     resizeObserver.observe(videoElement);
 
-    const enforceSpeed = () => {
-      if (!isSpeedingUp) return;
-      const player = document.querySelector("video");
-      if (player) {
-        player.playbackRate = currentSpeed;
-      }
-      requestAnimationFrame(enforceSpeed);
-    };
+    const override = createPlaybackOverride({
+      resolveVideo: () => document.querySelector("video"),
+      getSpeed: () => currentSpeed,
+    });
 
-    let wasPaused = false;
-
-    const startSpeedUp = () => {
-      if (isSpeedingUp) return;
-      isSpeedingUp = true;
+    override.subscribe((active) => {
       const wrapper = indicator?.querySelector(".wrapper");
-      wrapper?.classList.add("visible");
-      enforceSpeed();
-      if (videoElement.paused) {
-        wasPaused = true;
-        videoElement.play();
-      }
-    };
-
-    const stopSpeedUp = () => {
-      isSpeedingUp = false;
-      const wrapper = indicator?.querySelector(".wrapper");
-      wrapper?.classList.remove("visible");
-      const player = document.querySelector("video");
-      if (player) {
-        player.playbackRate = 1;
-      }
-      if (wasPaused) {
-        videoElement.pause();
-        wasPaused = false;
-      }
-    };
+      wrapper?.classList.toggle("visible", active);
+    });
 
     ctx.addEventListener(window, "keydown", (e) => {
       const target = e.target as HTMLElement | null;
@@ -122,22 +94,22 @@ export default defineContentScript({
         return;
 
       if (e.code === currentKeybind && !e.repeat) {
-        startSpeedUp();
+        override.start();
       }
     });
 
     ctx.addEventListener(window, "keyup", (e) => {
       if (e.code === currentKeybind) {
-        stopSpeedUp();
+        override.stop();
       }
     });
 
     ctx.addEventListener(window, "blur", () => {
-      stopSpeedUp();
+      override.stop();
     });
 
     ctx.onInvalidated(() => {
-      isSpeedingUp = false;
+      override.dispose();
       ui.remove();
     });
   },
