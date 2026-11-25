@@ -1,4 +1,6 @@
 const MIN_HOLD_MS = 100;
+const BOOST_MIN_BUFFER_SECONDS = 1;
+const BOOST_RESUME_BUFFER_SECONDS = 2;
 
 interface PlaybackOverrideDeps {
   resolveVideo: () => HTMLVideoElement | null;
@@ -12,11 +14,26 @@ interface ActiveGesture {
   phase: "active";
   initialVideo: HTMLVideoElement;
   wasPaused: boolean;
-  boostedVideo: HTMLVideoElement | null;
+  playback: { video: HTMLVideoElement; rate: number } | null;
   frameId: number;
 }
 
 type Gesture = { phase: "pending"; readyAt: number; frameId: number } | ActiveGesture;
+
+function hasBufferedPlayback(video: HTMLVideoElement, requiredSeconds: number) {
+  if (video.seeking || video.readyState < HTMLMediaElement.HAVE_FUTURE_DATA) return false;
+
+  const { buffered, currentTime, duration } = video;
+  for (let index = 0; index < buffered.length; index++) {
+    if (buffered.start(index) > currentTime) break;
+
+    const end = buffered.end(index);
+    if (end <= currentTime) continue;
+
+    return (Number.isFinite(duration) && end >= duration) || end - currentTime >= requiredSeconds;
+  }
+  return false;
+}
 
 export function createPlaybackOverride(deps: PlaybackOverrideDeps) {
   const requestFrame = deps.requestFrame ?? requestAnimationFrame;
@@ -25,17 +42,28 @@ export function createPlaybackOverride(deps: PlaybackOverrideDeps) {
   let gesture: Gesture | undefined;
 
   const applyRate = (active: ActiveGesture, video: HTMLVideoElement | null) => {
-    const previous = active.boostedVideo;
-    if (previous && previous !== video && previous.playbackRate !== 1) {
-      previous.playbackRate = 1;
+    const previous = active.playback;
+    if (previous && previous.video !== video && previous.video.playbackRate !== 1) {
+      previous.video.playbackRate = 1;
     }
 
-    if (video) {
-      const speed = deps.getSpeed();
-      if (video.playbackRate !== speed) video.playbackRate = speed;
+    if (!video) {
+      active.playback = null;
+      deps.onVideo(null);
+      return;
     }
-    active.boostedVideo = video;
-    deps.onVideo(video);
+
+    const speed = deps.getSpeed();
+    const continuingBoost = previous?.video === video && previous.rate === speed;
+    const bufferSeconds = continuingBoost ? BOOST_MIN_BUFFER_SECONDS : BOOST_RESUME_BUFFER_SECONDS;
+    const canApplySpeed = speed <= 1 || hasBufferedPlayback(video, speed * bufferSeconds);
+    const rate = canApplySpeed ? speed : 1;
+    if (video.playbackRate !== rate) video.playbackRate = rate;
+
+    if (previous?.video === video) previous.rate = rate;
+    else active.playback = { video, rate };
+
+    deps.onVideo(canApplySpeed ? video : null);
   };
 
   const enforce = (now: number) => {
@@ -48,7 +76,7 @@ export function createPlaybackOverride(deps: PlaybackOverrideDeps) {
           phase: "active",
           initialVideo: video,
           wasPaused: video.paused,
-          boostedVideo: null,
+          playback: null,
           frameId: gesture.frameId,
         };
         if (gesture.wasPaused) void video.play().catch(() => {});
