@@ -1,3 +1,5 @@
+const MIN_HOLD_MS = 100;
+
 interface PlaybackOverrideDeps {
   resolveVideo: () => HTMLVideoElement | null;
   getSpeed: () => number;
@@ -7,17 +9,20 @@ interface PlaybackOverrideDeps {
 }
 
 interface ActiveGesture {
+  phase: "active";
   initialVideo: HTMLVideoElement;
   wasPaused: boolean;
   boostedVideo: HTMLVideoElement | null;
   frameId: number;
 }
 
+type Gesture = { phase: "pending"; readyAt: number; frameId: number } | ActiveGesture;
+
 export function createPlaybackOverride(deps: PlaybackOverrideDeps) {
   const requestFrame = deps.requestFrame ?? requestAnimationFrame;
   const cancelFrame = deps.cancelFrame ?? cancelAnimationFrame;
 
-  let gesture: ActiveGesture | undefined;
+  let gesture: Gesture | undefined;
 
   const applyRate = (active: ActiveGesture, video: HTMLVideoElement | null) => {
     const previous = active.boostedVideo;
@@ -33,25 +38,36 @@ export function createPlaybackOverride(deps: PlaybackOverrideDeps) {
     deps.onVideo(video);
   };
 
-  const enforce = () => {
+  const enforce = (now: number) => {
     if (!gesture) return;
-    applyRate(gesture, deps.resolveVideo());
+
+    if (gesture.phase === "active" || now >= gesture.readyAt) {
+      const video = deps.resolveVideo();
+      if (gesture.phase === "pending" && video) {
+        gesture = {
+          phase: "active",
+          initialVideo: video,
+          wasPaused: video.paused,
+          boostedVideo: null,
+          frameId: gesture.frameId,
+        };
+        if (gesture.wasPaused) void video.play().catch(() => {});
+      }
+
+      if (gesture.phase === "active") applyRate(gesture, video);
+    }
+
     gesture.frameId = requestFrame(enforce);
   };
 
   const start = () => {
-    if (gesture) return false;
-
-    const video = deps.resolveVideo();
-    if (!video) return false;
+    if (gesture || !deps.resolveVideo()) return false;
 
     gesture = {
-      initialVideo: video,
-      wasPaused: video.paused,
-      boostedVideo: null,
+      phase: "pending",
+      readyAt: performance.now() + MIN_HOLD_MS,
       frameId: requestFrame(enforce),
     };
-    if (gesture.wasPaused) void video.play().catch(() => {});
     return true;
   };
 
@@ -61,6 +77,8 @@ export function createPlaybackOverride(deps: PlaybackOverrideDeps) {
     const stopped = gesture;
     gesture = undefined;
     cancelFrame(stopped.frameId);
+    if (stopped.phase === "pending") return;
+
     applyRate(stopped, null);
     if (stopped.wasPaused) stopped.initialVideo.pause();
   };

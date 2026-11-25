@@ -12,7 +12,7 @@ _Configure the hotkey and speed multiplier in the extension popup._
 
 ## Features
 
-- **Hold to Speed Up**: Instant playback boost on any video.
+- **Hold to Speed Up.** Playback speeds up after a brief hold.
 - **Visual Overlay**: A clean indicator shows current speed.
 - **Universal**: Works on YouTube, Netflix, Twitch, and any other site using HTML5 video.
 
