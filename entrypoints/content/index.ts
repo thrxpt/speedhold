@@ -80,6 +80,10 @@ export default defineContentScript({
     });
 
     let heldKey: string | undefined;
+    const consumeShortcut = (event: KeyboardEvent) => {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    };
     const stopGesture = () => {
       heldKey = undefined;
       override.stop();
@@ -89,15 +93,30 @@ export default defineContentScript({
       window,
       "keydown",
       (event) => {
-        if (event.code !== settings.keybind || event.repeat || heldKey) return;
-        const target = event.composedPath()[0];
-        if (
-          target instanceof HTMLElement &&
-          (target.matches("input, textarea") || target.isContentEditable)
-        )
-          return;
+        if (event.code !== heldKey) {
+          if (
+            event.code !== settings.keybind ||
+            event.repeat ||
+            heldKey !== undefined ||
+            event.isComposing
+          )
+            return;
 
-        if (override.start()) heldKey = event.code;
+          const hasModifier = event.altKey || event.ctrlKey || event.metaKey || event.shiftKey;
+          if (hasModifier && !event.getModifierState(event.key)) return;
+
+          const target = event.composedPath()[0];
+          if (
+            target instanceof HTMLElement &&
+            (target.closest("input, textarea, select") || target.isContentEditable)
+          )
+            return;
+
+          if (!override.start()) return;
+          heldKey = event.code;
+        }
+
+        consumeShortcut(event);
       },
       { capture: true },
     );
@@ -105,7 +124,9 @@ export default defineContentScript({
       window,
       "keyup",
       (event) => {
-        if (event.code === heldKey) stopGesture();
+        if (event.code !== heldKey) return;
+        consumeShortcut(event);
+        stopGesture();
       },
       { capture: true },
     );
