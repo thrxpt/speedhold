@@ -1,98 +1,69 @@
-export interface PlaybackOverrideDeps {
-  /** Resolve the current <video> on demand. Re-resolved per enforce tick so the
-   *  override survives SPA node swaps. */
+interface PlaybackOverrideDeps {
   resolveVideo: () => HTMLVideoElement | null;
-  /** Live read of the target playback rate. */
   getSpeed: () => number;
+  onVideo: (video: HTMLVideoElement | null) => void;
   requestFrame?: (cb: FrameRequestCallback) => number;
   cancelFrame?: (id: number) => void;
 }
 
-export interface PlaybackOverride {
-  start: () => void;
-  stop: () => void;
-  dispose: () => void;
-  readonly active: boolean;
-  /** Notify on active-state changes. Returns an unsubscribe. */
-  subscribe: (cb: (active: boolean) => void) => () => void;
-}
-
-interface PauseSnapshot {
-  el: HTMLVideoElement;
+interface ActiveGesture {
+  initialVideo: HTMLVideoElement;
   wasPaused: boolean;
+  boostedVideo: HTMLVideoElement | null;
+  frameId: number;
 }
 
-export function createPlaybackOverride(deps: PlaybackOverrideDeps): PlaybackOverride {
+export function createPlaybackOverride(deps: PlaybackOverrideDeps) {
   const requestFrame = deps.requestFrame ?? requestAnimationFrame;
   const cancelFrame = deps.cancelFrame ?? cancelAnimationFrame;
 
-  let active = false;
-  let frameId: number | undefined;
-  let snapshot: PauseSnapshot | undefined;
-  const subscribers = new Set<(active: boolean) => void>();
+  let gesture: ActiveGesture | undefined;
 
-  const setActive = (next: boolean) => {
-    if (active === next) return;
-    active = next;
-    for (const cb of subscribers) cb(active);
+  const applyRate = (active: ActiveGesture, video: HTMLVideoElement | null) => {
+    const previous = active.boostedVideo;
+    if (previous && previous !== video && previous.playbackRate !== 1) {
+      previous.playbackRate = 1;
+    }
+
+    if (video) {
+      const speed = deps.getSpeed();
+      if (video.playbackRate !== speed) video.playbackRate = speed;
+    }
+    active.boostedVideo = video;
+    deps.onVideo(video);
   };
 
-  // Enforce Loop: re-resolve the current video every frame and re-assert rate.
   const enforce = () => {
-    if (!active) return;
-    const video = deps.resolveVideo();
-    if (video) video.playbackRate = deps.getSpeed();
-    frameId = requestFrame(enforce);
+    if (!gesture) return;
+    applyRate(gesture, deps.resolveVideo());
+    gesture.frameId = requestFrame(enforce);
   };
 
   const start = () => {
-    if (active) return;
-    setActive(true);
+    if (gesture) return false;
 
     const video = deps.resolveVideo();
-    if (video) {
-      snapshot = { el: video, wasPaused: video.paused };
-      if (video.paused) video.play();
-    } else {
-      snapshot = undefined;
-    }
+    if (!video) return false;
 
-    frameId = requestFrame(enforce);
+    gesture = {
+      initialVideo: video,
+      wasPaused: video.paused,
+      boostedVideo: null,
+      frameId: requestFrame(enforce),
+    };
+    if (gesture.wasPaused) void video.play().catch(() => {});
+    return true;
   };
 
   const stop = () => {
-    if (!active) return;
-    setActive(false);
+    if (!gesture) return;
 
-    if (frameId !== undefined) {
-      cancelFrame(frameId);
-      frameId = undefined;
-    }
-
-    // rate-restore: whatever is current goes back to 1×.
-    const current = deps.resolveVideo();
-    if (current) current.playbackRate = 1;
-
-    // pause-restore: re-pause the element we played, not whatever is current.
-    if (snapshot?.wasPaused) snapshot.el.pause();
-    snapshot = undefined;
+    const stopped = gesture;
+    gesture = undefined;
+    cancelFrame(stopped.frameId);
+    applyRate(stopped, null);
+    if (stopped.wasPaused) stopped.initialVideo.pause();
   };
 
-  const dispose = () => {
-    stop();
-    subscribers.clear();
-  };
-
-  return {
-    start,
-    stop,
-    dispose,
-    get active() {
-      return active;
-    },
-    subscribe(cb) {
-      subscribers.add(cb);
-      return () => subscribers.delete(cb);
-    },
-  };
+  return { start, stop };
 }

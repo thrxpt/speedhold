@@ -1,117 +1,115 @@
 import "@/assets/style.css";
 import "@fontsource-variable/outfit/wght.css";
+import { createApp, h, reactive, shallowRef } from "vue";
+
 import App from "./App.vue";
 
 export default defineContentScript({
   matches: ["<all_urls>"],
   cssInjectionMode: "ui",
   async main(ctx) {
-    const waitForElement = (selector: string): Promise<Element> => {
-      return new Promise((resolve) => {
-        if (document.querySelector(selector)) {
-          return resolve(document.querySelector(selector)!);
-        }
+    const [playbackSpeed, keybind, showIndicator] = await Promise.all([
+      playbackSpeedStorage.getValue(),
+      keybindStorage.getValue(),
+      showIndicatorStorage.getValue(),
+    ]);
+    if (ctx.isInvalid) return;
 
-        const observer = new MutationObserver(() => {
-          if (document.querySelector(selector)) {
-            observer.disconnect();
-            resolve(document.querySelector(selector)!);
-          }
-        });
+    const settings = reactive({ playbackSpeed, keybind, showIndicator });
+    ctx.onInvalidated(
+      playbackSpeedStorage.watch((speed) => {
+        settings.playbackSpeed = speed;
+      }),
+    );
+    ctx.onInvalidated(
+      keybindStorage.watch((code) => {
+        settings.keybind = code;
+      }),
+    );
+    ctx.onInvalidated(
+      showIndicatorStorage.watch((visible) => {
+        settings.showIndicator = visible;
+      }),
+    );
 
-        observer.observe(document.documentElement, {
-          childList: true,
-          subtree: true,
-        });
+    const position = shallowRef<{ x: number; y: number } | null>(null);
+    let indicatorMount: Promise<void> | undefined;
+    const mountIndicator = async () => {
+      const ui = await createShadowRootUi(ctx, {
+        name: "speedhold-ui",
+        position: "inline",
+        anchor: document.documentElement,
+        onMount(container) {
+          const app = createApp({
+            render: () => h(App, { speed: settings.playbackSpeed, position: position.value }),
+          });
+          app.mount(container);
+          return app;
+        },
+        onRemove(app) {
+          app?.unmount();
+        },
       });
+      if (!ctx.isInvalid) ui.mount();
     };
-
-    let indicator: HTMLElement | undefined;
-    const overrideActive = ref(false);
-
-    let currentSpeed = await playbackSpeedStorage.getValue();
-    let currentKeybind = await keybindStorage.getValue();
-
-    // Watch for changes
-    playbackSpeedStorage.watch((newSpeed) => {
-      currentSpeed = newSpeed ?? DEFAULT_CONFIG.playbackSpeed;
-    });
-
-    keybindStorage.watch((newKeybind) => {
-      currentKeybind = newKeybind ?? DEFAULT_CONFIG.keybind;
-    });
-
-    const videoElement = (await waitForElement("video")) as HTMLVideoElement;
-    const rect = videoElement.getBoundingClientRect();
-
-    const ui = await createShadowRootUi(ctx, {
-      name: "speedhold-ui",
-      position: "overlay",
-      anchor: videoElement,
-      append: "before",
-      onMount: (container) => {
-        container.style.width = `${rect.width}px`;
-        container.style.height = `${rect.height}px`;
-        container.style.position = "relative";
-        container.style.pointerEvents = "none";
-        container.style.zIndex = "99999";
-        container.style.margin = "0";
-        const app = createApp(App);
-        app.provide("overrideActive", overrideActive);
-        app.mount(container);
-        indicator = container;
-        return app;
-      },
-      onRemove: (app) => {
-        app?.unmount();
-      },
-    });
-    ui.mount();
-
-    const resizeObserver = new ResizeObserver(() => {
-      if (indicator) {
-        const newRect = videoElement.getBoundingClientRect();
-        indicator.style.width = `${newRect.width}px`;
-        indicator.style.height = `${newRect.height}px`;
-      }
-    });
-    resizeObserver.observe(videoElement);
 
     const override = createPlaybackOverride({
       resolveVideo: () => document.querySelector("video"),
-      getSpeed: () => currentSpeed,
+      getSpeed: () => settings.playbackSpeed,
+      onVideo(video) {
+        if (!video || !settings.showIndicator) {
+          position.value = null;
+          return;
+        }
+
+        const bounds = video.getBoundingClientRect();
+        if (!bounds.width || !bounds.height) {
+          position.value = null;
+          return;
+        }
+
+        const x = bounds.left + bounds.width / 2;
+        const y = bounds.top + bounds.height * 0.2;
+        const previous = position.value;
+        if (previous?.x !== x || previous.y !== y) position.value = { x, y };
+
+        indicatorMount ??= mountIndicator().catch((error: unknown) => {
+          console.warn("SpeedHold could not mount its indicator.", error);
+        });
+      },
     });
 
-    override.subscribe((active) => {
-      overrideActive.value = active;
-    });
-
-    ctx.addEventListener(window, "keydown", (e) => {
-      const target = e.target as HTMLElement | null;
-      if (
-        target &&
-        (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)
-      )
-        return;
-
-      if (e.code === currentKeybind && !e.repeat) {
-        override.start();
-      }
-    });
-
-    ctx.addEventListener(window, "keyup", (e) => {
-      if (e.code === currentKeybind) {
-        override.stop();
-      }
-    });
-
-    ctx.addEventListener(window, "blur", () => {
+    let heldKey: string | undefined;
+    const stopGesture = () => {
+      heldKey = undefined;
       override.stop();
-    });
+    };
 
-    ctx.onInvalidated(() => {
-      override.dispose();
-      ui.remove();
-    });
+    ctx.addEventListener(
+      window,
+      "keydown",
+      (event) => {
+        if (event.code !== settings.keybind || event.repeat || heldKey) return;
+        const target = event.composedPath()[0];
+        if (
+          target instanceof HTMLElement &&
+          (target.matches("input, textarea") || target.isContentEditable)
+        )
+          return;
+
+        if (override.start()) heldKey = event.code;
+      },
+      { capture: true },
+    );
+    ctx.addEventListener(
+      window,
+      "keyup",
+      (event) => {
+        if (event.code === heldKey) stopGesture();
+      },
+      { capture: true },
+    );
+    ctx.addEventListener(window, "blur", stopGesture);
+    ctx.onInvalidated(stopGesture);
   },
 });

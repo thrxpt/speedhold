@@ -1,48 +1,84 @@
 <script lang="ts" setup>
 import { FastForward } from "@lucide/vue";
 
-const currentSpeed = ref(DEFAULT_CONFIG.playbackSpeed);
-const showIndicator = ref(DEFAULT_CONFIG.showIndicator);
-const active = inject<Ref<boolean>>("overrideActive", ref(false));
+defineProps<{
+  speed: number;
+  position: { x: number; y: number } | null;
+}>();
 
-onMounted(async () => {
-  currentSpeed.value = (await playbackSpeedStorage.getValue()) ?? DEFAULT_CONFIG.playbackSpeed;
-  showIndicator.value = (await showIndicatorStorage.getValue()) ?? DEFAULT_CONFIG.showIndicator;
+const wrapper = useTemplateRef<HTMLDivElement>("wrapper");
+const popover = typeof HTMLElement.prototype.showPopover === "function" ? "manual" : undefined;
 
-  playbackSpeedStorage.watch((newSpeed) => {
-    currentSpeed.value = newSpeed ?? DEFAULT_CONFIG.playbackSpeed;
-  });
+const showPopover = () => {
+  const element = wrapper.value;
+  if (!popover || !element) return;
 
-  showIndicatorStorage.watch((newVal) => {
-    showIndicator.value = newVal ?? DEFAULT_CONFIG.showIndicator;
-  });
-});
+  // Fullscreen may have entered the top layer above the open indicator.
+  element.hidePopover();
+  element.showPopover();
+};
+
+watchPostEffect(showPopover);
+onMounted(() => document.addEventListener("fullscreenchange", showPopover));
+onUnmounted(() => document.removeEventListener("fullscreenchange", showPopover));
 </script>
 
 <template>
-  <div v-if="showIndicator" class="wrapper" :class="{ visible: active }">
+  <div
+    v-if="position"
+    ref="wrapper"
+    class="wrapper"
+    :popover="popover"
+    :style="{ left: `${position.x}px`, top: `${position.y}px` }"
+    aria-hidden="true"
+  >
     <div class="box">
-      <div class="speed">{{ currentSpeed.toFixed(1) }}<span>×</span></div>
+      <div class="speed">{{ speed.toFixed(1) }}<span>×</span></div>
       <FastForward :size="16" fill="var(--text)" strokeWidth="0" />
     </div>
   </div>
 </template>
 
+<style>
+:host {
+  /* WXT resets the shadow host with `all: initial !important`. */
+  position: fixed !important;
+  inset: 0 auto auto 0 !important;
+  width: 0 !important;
+  height: 0 !important;
+  z-index: 2147483647 !important;
+  pointer-events: none !important;
+}
+</style>
+
 <style scoped>
 .wrapper {
-  position: absolute;
-  left: 50%;
-  top: 20%;
-  opacity: 0;
-  transform: translateX(-50%) scale(0.98);
-  transition:
-    opacity 0.2s ease-out,
-    transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  overflow: visible;
+  pointer-events: none;
+  transform: translateX(-50%);
 }
 
-.wrapper.visible {
-  opacity: 1;
-  transform: translateX(-50%) scale(1);
+.wrapper::backdrop {
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .wrapper {
+    animation: appear 0.15s ease-out;
+  }
+}
+
+@keyframes appear {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) scale(0.98);
+  }
 }
 
 .box {
